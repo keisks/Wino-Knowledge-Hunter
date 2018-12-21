@@ -105,7 +105,8 @@ whichModel= 1
 #Winograd sentences parsed by CoreNLP, stored as XML files, loaded and sorted
 listOfXmlFiles=glob.glob('winogradXML/*xml')
 listOfXmlFiles.sort()
-numberOfXmlFiles= len(listOfXmlFiles)
+#numberOfXmlFiles= len(listOfXmlFiles)
+n = numberOfXmlFiles= len(listOfXmlFiles)
 
 allSentences=[]
 
@@ -121,6 +122,8 @@ discardedC1 = [set() for _ in range(n)]
 discardedC2 = [set() for _ in range(n)]
 synonymsComponent1=[{} for _ in range(n)]
 synonymsComponent2=[{} for _ in range(n)]
+
+decisionExpandedScoring=['' for _ in range(n)]
 
 f2=open("winogradSolutions.txt") 
 lines=f2.readlines()    
@@ -377,10 +380,14 @@ if filtered:
 
 #Save schema information and C and Q
 folder = "StandardModified/"
+
 with open(folder + 'lexicalScheme', 'wb') as fp:
     pickle.dump(lexicalScheme, fp)  
 with open(folder + 'scheme', 'wb') as fp:
     pickle.dump(scheme, fp)
+with open(folder + 'decisionExpandedScoring', 'wb') as fp:
+    pickle.dump(decisionExpandedScoring, fp)
+
 if whichModel==0:
     folder = "StandardModified/"
     with open(folder + 'component1Sentence', 'wb') as fp:
@@ -394,6 +401,7 @@ if whichModel==0:
             pickle.dump(discardedC1, fp)
         with open(folder + 'discardedC2', 'wb') as fp:
             pickle.dump(discardedC2, fp)
+
 elif whichModel==1:
     folder = "SynonymModifiedNew/"
     with open(folder + 'component1SentenceSyn', 'wb') as fp:
