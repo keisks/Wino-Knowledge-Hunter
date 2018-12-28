@@ -36,13 +36,23 @@ class ContextualWebSearchAPI:
         snippets = []
 
         for p in range(pages):
-            response = requests.get("https://contextualwebsearch-websearch-v1.p.rapidapi.com/api/Search/WebSearchAPIWithPagination?autoCorrect={}&pageNumber={}&pageSize=50&q={}&safeSearch=true".format(autoCorrect, str(p+1), query),
-            headers={"X-RapidAPI-Key": self.apikey, "Accept": "application/json"}).json()
+            try:
+                response = requests.get("https://contextualwebsearch-websearch-v1.p.rapidapi.com/api/Search/WebSearchAPIWithPagination?autoCorrect={}&pageNumber={}&pageSize=50&q={}&safeSearch=true".format(autoCorrect, str(p+1), query),
+                headers={"X-RapidAPI-Key": self.apikey, "Accept": "application/json"}).json()
 
-            for webPage in response["value"]:
-                description = webPage["description"]
-                snippets.append(normalize(description))
-        return snippets[:num_snippets]
+                for webPage in response["value"]:
+                    description = webPage["description"]
+                    snippets.append(normalize(description))
+
+            # This API is not stable. Ignore the API errors (RuntimeError, simplejson.errors.JSONDecodeError, etc.)
+            except:
+                pass
+
+        #assert len(snippets) > 0 # warning?
+        if len(snippets) == 0:
+            return []
+        else:
+            return snippets[:num_snippets]
 
 
 # Bing Search (if you have an account for bing search API)
@@ -81,19 +91,20 @@ class BingSearchApi:
 
 
 if __name__ == "__main__":
-    # unittest
+    # unit test
 
-    """
+    #"""
     query = "Donald NOT Trump"
     bing_subscription_key = os.environ["API_KEY_BING"]
     bing_search = BingSearchApi(bing_subscription_key)
     snippets = bing_search.get_snippets(query, num_snippets=100)
     print(snippets)
     print(len(snippets))
-    """
+    #"""
     query = "Donald -Trump"
     X_Mashape_Key = os.environ["API_KEY_X_MASHAPE"]
     contextual_web_search = ContextualWebSearchAPI(X_Mashape_Key)
     snippets = contextual_web_search.get_snippets(query, num_snippets=100)
     print(snippets)
     print(len(snippets))
+    #"""
