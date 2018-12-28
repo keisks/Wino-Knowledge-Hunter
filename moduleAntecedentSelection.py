@@ -56,7 +56,8 @@ def antecedentSelection(solutions_file="winogradSolutions.txt", n=273, whichMode
         folder = 'StandardModified/'
 
         component1Sentence, component2Sentence, info, infoGoogle, decision = get_data(folder, component1_file='component1Sentence', 
-            component2_file='component2Sentence', info_file='informationOfSentenceOriginal', decisionMatrix_file='decisionExpandedScoringOriginal',)
+            component2_file='component2Sentence', info_file='informationOfSentence', decisionMatrix_file='decisionExpandedScoring',)
+            #component2_file='component2Sentence', info_file='informationOfSentenceOriginal', decisionMatrix_file='decisionExpandedScoringOriginal',)
 
     elif whichModel==1:
         folder = 'SynonymModifiedNew/'
@@ -107,7 +108,8 @@ def antecedentSelection(solutions_file="winogradSolutions.txt", n=273, whichMode
     totalNonSpecificCount=[0 for _ in range(n)]
 
     #Instiate an updated decision matrix that takes into account scoring of sentence strengths
-    decision2=['' for _ in range(n)]
+    #decision2=['' for _ in range(n)]
+    decision2=[numpy.nan for _ in range(n)]
 
 
     info2=copy.deepcopy(info)
@@ -256,7 +258,7 @@ def antecedentSelection(solutions_file="winogradSolutions.txt", n=273, whichMode
     decisionTrain=decision2[0:n]
     target=[0 for _ in range(len(decisionTrain))]
     decisionNP=numpy.array(decisionTrain)
-    decisionNP[decisionNP==''] = numpy.nan
+    #decisionNP[decisionNP==''] = numpy.nan
     decisionNP = decisionNP.astype(numpy.float)
 
     #Create an index matrix indicating which winograd sentences are class A (validWino), and which yielded results (answered)
@@ -336,8 +338,6 @@ def antecedentSelection(solutions_file="winogradSolutions.txt", n=273, whichMode
 
     #The performance:
     correctTraditional=correctA/(numberOfWinogradAnswered*1.0)
-
-
 
     #Relaxed Setting Performance
     decisionRelaxed=decision2
