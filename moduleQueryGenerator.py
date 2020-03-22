@@ -11,8 +11,25 @@ import re
 from nltk.corpus import wordnet
 from operator import itemgetter
 import itertools
+import argparse
+from tqdm import tqdm
+import csv
+import json
+
 from PyDictionary import PyDictionary
 dictionary=PyDictionary()
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-m", "--model", choices=["standard", "synonym"], help="model type (standard or synonym)", default="standard")
+parser.add_argument("-i", "--indir", help="directory name for output", default="winogradXML")
+parser.add_argument("-o", "--outdir", help="directory name for output", default="model")
+parser.add_argument("-f", "--filter", action="store_true", help="filter or not", default=False)
+args = parser.parse_args()
+#if os.path.exists("./"+args.outdir):
+#    print("outdir already exists!")
+#    exit(1)
+#os.makedirs("./"+args.outdir)
+
 
 def similarity(word1, word2):
     allsyns1 = set(ss for ss in wordnet.synsets(word1))
@@ -97,13 +114,38 @@ def save_divide(a, b):
     else:
         return a/b
 
+def are_function_words(phrase):
+    for t in phrase.split():
+        if not t.lower() in functionWords:
+            return False
+    return True
+
+def expand_queries(allqueris):
+    expanded_queries_all = []
+    for qs in allqueris:
+        expanded_queries = set([])
+        # add existing queries
+        for q in qs:
+            if not are_function_words(q):
+                expanded_queries.add(q)
+
+            # expand (subsequent bigrams)
+            if len(q.split()) > 2:
+                bigrams = zip(q.split(), q.split()[1:])
+                for b in bigrams:
+                    b = " ".join(b)
+                    if not are_function_words(b):
+                        expanded_queries.add(b)
+
+        expanded_queries_all.append(list(expanded_queries))
+
+    return expanded_queries_all
 
 threshhold = 0.6
-filtered = True
-whichModel= 1
+filtered = args.filter
 
 #Winograd sentences parsed by CoreNLP, stored as XML files, loaded and sorted
-listOfXmlFiles=glob.glob('winogradXML/*xml')
+listOfXmlFiles=glob.glob(args.indir + "/*xml")
 listOfXmlFiles.sort()
 #numberOfXmlFiles= len(listOfXmlFiles)
 n = numberOfXmlFiles= len(listOfXmlFiles)
@@ -125,27 +167,63 @@ synonymsComponent2=[{} for _ in range(n)]
 
 decisionExpandedScoring=['' for _ in range(n)]
 
-f2=open("winogradSolutions.txt") 
-lines=f2.readlines()    
+f2 = None
+lines = []
+option1_list = []
+option2_list = []
+sentence_list = []
+if "winograd" in args.indir:
+    f2=open("winogradSolutions.txt") 
+    lines=f2.readlines()
+#elif "winoGrande" in args.indir:
+elif "winogrande" in args.indir:
+    winoG_file_path = ""
+    if "Dev" in args.indir:
+        #winoG_file_path = "./winoGrande/dev.tsv"
+        winoG_file_path = "./winogrande_1.1/dev_sub.jsonl"
+    elif "Test" in args.indir:
+        winoG_file_path = "./winogrande_1.1/test_sub.jsonl"
+    #for row in csv.DictReader(open(winoG_file_path, 'r'), delimiter='\t'):
+    for row in open(winoG_file_path, 'r'):
+        row = json.loads(row.strip())
+        sent_split = row["sentence"].split('_')
+        assert len(sent_split) == 2
+        lines.append(sent_split[1])
+        option1_list.append(row["option1"])
+        option2_list.append(row["option2"])
+        sentence_list.append(row["sentence"])
+
+else:
+    raise
+
 
 listOfAuxVerbs=["is","get","gets","was","were","can","could","did","does","have","may","might",
                 "should","will","would","had","are","has","been","being", "must", "ought to", 
                 "shall", "do","having", "be","got"]
 
-if sys.argv[1]=='standard':
-    whichModel=0
-elif sys.argv[1]=='synonym':
-    whichModel=1
+functionWords = {}
+for row in open("./function_words.txt", 'r'):
+    functionWords[row.strip().lower()] = 1
 
-if len(sys.argv) > 2:
-    if sys.argv[2] == 'filter':
-        filtered = True
+
+whichModel= None
+if args.model == 'standard':
+    whichModel=0
+elif args.model == 'synonym':
+    whichModel=1
+else:
+    raise
+
+
+#if len(sys.argv) > 2:
+#    if sys.argv[2] == 'filter':
+#        filtered = True
 
 #Go through each XML File, and extract Q and C
-for f in range(0, n):
+for f in tqdm(range(0, n)):
     firstINindex=0
 
-    print f
+    #print f
     xml = open(listOfXmlFiles[f]).read()
     annotated_text = A(xml)
     allSentences+=annotated_text.sentences
@@ -159,7 +237,14 @@ for f in range(0, n):
     positionOfStop=0
 
     #Check if PronounQ before or after PredQ (basically see if class is Class A.1 or Class A.2)
-    snippet=lines[f*10+2].split(': ')[1]
+    snippet = ""
+    if "winograd" in args.indir:
+        snippet=lines[f*10+2].split(': ')[1]
+    elif "winogrande" in args.indir:
+        snippet = lines[f]
+    else:
+        raise
+
     text = word_tokenize(snippet)
     tagged=nltk.pos_tag(text)
     prpEncounteredFinal=0
@@ -180,8 +265,18 @@ for f in range(0, n):
 
 
     #Determine first entity and second entity
-    entityOne=lines[f*10+4].split()   
-    entityTwo=lines[f*10+5].split() 
+    entityOne = None
+    entityTwo = None
+    if "winograd" in args.indir:
+        entityOne=lines[f*10+4].split()   
+        entityTwo=lines[f*10+5].split() 
+    elif "winogrande" in args.indir:
+        snippet = lines[f]
+        entityOne = option1_list[f]
+        entityTwo = option2_list[f]
+    else:
+        raise
+
     entityOneArray[f]=entityOne[-1]
 
     #Which Syntactic Structure
@@ -190,7 +285,17 @@ for f in range(0, n):
     verbBetweenEntities=0
     entityOneEncountered=0
     entityTwoEncountered=0
-    theSentence=lines[f*10]
+
+    theSentence = None
+    if "winograd" in args.indir:
+        theSentence=lines[f*10]
+    elif "winogrande" in args.indir:
+        theSentence = sentence_list[f]
+    else:
+        raise
+
+
+
     text = word_tokenize(theSentence)
     tagged=nltk.pos_tag(text)
     for pos in range(0,len(tagged)):
@@ -258,29 +363,28 @@ for f in range(0, n):
             except:
                 synonymSet = []
             synonymsComponent1[f]=synonymSet
-            """
+            #"""
             if len(wordnet.synsets(verb,wordnet.VERB))>0:
                 synonyms = wordnet.synsets(verb,wordnet.VERB)[0]
                 synonymSet = synonyms.lemma_names()
 
                 synonymsComponent1[f]=synonymSet
-            """
+            #"""
             try:
                 for synonym in synonymsComponent1[f]:
                     synonym=synonym.replace("_"," ")
                     if whichModel==1:
                         component1Sentence[f].add(synonym)
-                    if len(component1Sentence[f])>=max_queries:
-                        break
-                if len(component1Sentence[f])>=max_queries:
-                    break
+                    #if len(component1Sentence[f])>=max_queries:
+                    #    break
+                #if len(component1Sentence[f])>=max_queries:
+                #    break
             except:
                 break
 
 
 
     component1Sentence[f] = map(lambda foo: foo.replace(' n\'t', 'n\'t'), component1Sentence[f])
-
 
 
     #Similar process to find set Q
@@ -338,7 +442,7 @@ for f in range(0, n):
                 except:
                     synonymSet = []
                 synonymsComponent2[f]=synonymSet
-                """
+                #"""
                 if len(wordnet.synsets(verb,wordnet.VERB))>0 or (isAdj==1 and len(wordnet.synsets(verb,wordnet.ADJ))>0):
                     if len(wordnet.synsets(verb,wordnet.VERB))>0:               
                         synonyms = wordnet.synsets(verb,wordnet.VERB)[0]
@@ -347,7 +451,7 @@ for f in range(0, n):
                     synonymSet = synonyms.lemma_names()
 
                     synonymsComponent2[f]=synonymSet
-                """
+                #"""
                 try:
                     for synonym in synonymsComponent2[f]:
                         synonym=synonym.replace("_"," ")
@@ -379,17 +483,22 @@ if filtered:
     print "Passages affected by filter: %d" % discarded
 
 #Save schema information and C and Q
-folder = "StandardModified/"
+#folder = "StandardModified/"
+folder = "./" + args.outdir + '/'
 
-with open(folder + 'lexicalScheme', 'wb') as fp:
-    pickle.dump(lexicalScheme, fp)  
-with open(folder + 'scheme', 'wb') as fp:
-    pickle.dump(scheme, fp)
-with open(folder + 'decisionExpandedScoring', 'wb') as fp:
-    pickle.dump(decisionExpandedScoring, fp)
+
+#component1Sentence = expand_queries(component1Sentence)
+#component2Sentence = expand_queries(component2Sentence)
+
 
 if whichModel==0:
-    folder = "StandardModified/"
+    #folder = "StandardModified/"
+    with open(folder + 'lexicalScheme', 'wb') as fp:
+        pickle.dump(lexicalScheme, fp)  
+    with open(folder + 'scheme', 'wb') as fp:
+        pickle.dump(scheme, fp)
+    with open(folder + 'decisionExpandedScoring', 'wb') as fp:
+        pickle.dump(decisionExpandedScoring, fp)
     with open(folder + 'component1Sentence', 'wb') as fp:
         pickle.dump(component1Sentence, fp)
     with open(folder + 'component2Sentence', 'wb') as fp:
@@ -403,21 +512,27 @@ if whichModel==0:
             pickle.dump(discardedC2, fp)
 
 elif whichModel==1:
-    folder = "SynonymModifiedNew/"
-    with open(folder + 'component1SentenceSyn', 'wb') as fp:
+    #folder = "SynonymModified/"
+    with open(folder + 'lexicalScheme', 'wb') as fp:
+        pickle.dump(lexicalScheme, fp)  
+    with open(folder + 'scheme', 'wb') as fp:
+        pickle.dump(scheme, fp)
+    with open(folder + 'decisionExpandedScoring', 'wb') as fp:
+        pickle.dump(decisionExpandedScoring, fp)
+    with open(folder + 'component1Sentence', 'wb') as fp:
         pickle.dump(component1Sentence, fp)
-    with open(folder + 'component2SentenceSyn', 'wb') as fp:
+    with open(folder + 'component2Sentence', 'wb') as fp:
         pickle.dump(component2Sentence, fp)
-    with open(folder + 'entityOneArraySyn', 'wb') as fp:
+    with open(folder + 'entityOneArray', 'wb') as fp:
         pickle.dump(entityOneArray, fp)
-    with open(folder + 'synonymsComponent1Syn', 'wb') as fp:
+    with open(folder + 'synonymsComponent1', 'wb') as fp:
         pickle.dump(synonymsComponent1, fp)
-    with open(folder + 'synonymsComponent2Syn', 'wb') as fp:
+    with open(folder + 'synonymsComponent2', 'wb') as fp:
         pickle.dump(synonymsComponent2, fp)
-    with open(folder + 'verbComponent2Syn', 'wb') as fp:
+    with open(folder + 'verbComponent2', 'wb') as fp:
         pickle.dump(verbComponent2, fp)
     if filtered:
-        with open(folder + 'discardedSynC1', 'wb') as fp:
+        with open(folder + 'discardedC1', 'wb') as fp:
                 pickle.dump(discardedC1, fp)
-        with open(folder + 'discardedSynC2', 'wb') as fp:
+        with open(folder + 'discardedC2', 'wb') as fp:
                 pickle.dump(discardedC2, fp)

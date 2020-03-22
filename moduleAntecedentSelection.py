@@ -2,6 +2,14 @@ import numpy
 import pickle
 import copy
 import sys
+import argparse
+
+arg_parser = argparse.ArgumentParser()
+arg_parser.add_argument('-d', "--dir", required=True, help="model directory name")
+arg_parser.add_argument("-f", "--filter", action="store_true", help="filter or not", default=False)
+args = arg_parser.parse_args()
+dirname = "./" + args.dir + '/'
+
 
 def get_data(folder, component1_file, component2_file, info_file, decisionMatrix_file, 
     info_file_google=None, used_google=False, discardC1_file=None, discardedC2_file=None, filtered=False):
@@ -45,13 +53,24 @@ def get_data(folder, component1_file, component2_file, info_file, decisionMatrix
 
 def antecedentSelection(solutions_file="winogradSolutions.txt", n=273, whichModel=0, filtered=False):
 
-    if sys.argv[1]=='standard':
-        whichModel=0
-    elif sys.argv[1]=='synonym':
-        whichModel=1
-    elif sys.argv[1]=='gold':
-        whichModel=2 
+    #if sys.argv[1]=='standard':
+    #    whichModel=0
+    #elif sys.argv[1]=='synonym':
+    #    whichModel=1
+    ##elif sys.argv[1]=='gold':
+    ##    whichModel=2
 
+    folder = dirname
+    if not filtered:
+        component1Sentence, component2Sentence, info, infoGoogle, decision = get_data(folder, component1_file='component1Sentence', 
+            component2_file='component2Sentence', info_file='informationOfSentence', decisionMatrix_file='decisionExpandedScoring', 
+            filtered=filtered)
+    else:
+        component1Sentence, component2Sentence, info, infoGoogle, decision = get_data(folder, component1_file='component1Sentence', 
+            component2_file='component2Sentence', info_file='informationOfSentence', decisionMatrix_file='decisionExpandedScoring',
+            discardC1_file='discardedC1', discardedC2_file='discardedC2', filtered=filtered)
+ 
+    """
     if whichModel==0:
         folder = 'StandardModified/'
 
@@ -74,16 +93,18 @@ def antecedentSelection(solutions_file="winogradSolutions.txt", n=273, whichMode
             component1_file='component1SentenceOriginalGold', component2_file='component2SentenceOriginalGold',
             info_file='informationOfSentenceOriginalGold', used_google=True, info_file_google='informationOfSentenceOriginalGoogle',
             decisionMatrix_file='decisionExpandedScoringOriginalGold2')
+    """
 
     #Open matrix indicating which Winograd sentence is in the form of Class A (denoted by value 0) or class B (denoted by value 1)	
-    with open('StandardModified/lexicalScheme', 'rb') as fp:
+    with open(folder+'lexicalScheme', 'rb') as fp:
         lexicalSchemeOriginal=pickle.load(fp)
 
     #Open matrix indicating which Winograd sentence is in the form of Class A.1 (E1PredCE2+PPredQ, denoted by value 0) or Class A.2 (E1PredCE2+PredQP, denoted by value 1)
-    with open('StandardModified/scheme', 'rb') as fp:
+    with open(folder+'scheme', 'rb') as fp:
         scheme=pickle.load(fp)
 
     #Get solutions
+    # TODO!!!
     with open(solutions_file, 'rb') as f:
         lines=f.readlines()
 
@@ -256,6 +277,19 @@ def antecedentSelection(solutions_file="winogradSolutions.txt", n=273, whichMode
 
     #Instantiate some variables
     decisionTrain=decision2[0:n]
+    print("DecisionTrain")
+    print(decisionTrain)
+    predictions = open(dirname + "predictions.txt", 'w')
+    for i, p in enumerate(decisionTrain):
+        if i > 0:
+            predictions.write('\n')
+        if str(p) == 'nan':
+            predictions.write('N')
+        else:
+            predictions.write(str(p+1))
+
+    exit()
+
     target=[0 for _ in range(len(decisionTrain))]
     decisionNP=numpy.array(decisionTrain)
     #decisionNP[decisionNP==''] = numpy.nan
@@ -440,4 +474,7 @@ def antecedentSelection(solutions_file="winogradSolutions.txt", n=273, whichMode
 
     print ""
 
-antecedentSelection()
+#antecedentSelection()
+#antecedentSelection(solutions_file="winogradSolutions.txt", n=273, whichModel=0, filtered=args.filter)
+#antecedentSelection(solutions_file="winogradSolutions.txt", n=2863, whichModel=0, filtered=args.filter)
+antecedentSelection(solutions_file="winogradSolutions.txt", n=250, whichModel=0, filtered=args.filter)
